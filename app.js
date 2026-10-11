@@ -6,8 +6,10 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Middleware to read JSON request bodies
 app.use(express.json());
 
+// Load initial tasks from task.json
 const taskData = JSON.parse(
   fs.readFileSync(path.join(__dirname, 'task.json'), 'utf8')
 );
@@ -17,6 +19,8 @@ let tasks = taskData.tasks || [];
 const priorities = ['low', 'medium', 'high'];
 
 // Validate task data
+// title, description, and completed are required.
+// priority is optional.
 const isValidTaskPayload = (task) => {
   return (
     task !== null &&
@@ -27,25 +31,35 @@ const isValidTaskPayload = (task) => {
     typeof task.description === 'string' &&
     task.description.trim() !== '' &&
     typeof task.completed === 'boolean' &&
-    priorities.includes(task.priority)
+    (
+      task.priority === undefined ||
+      priorities.includes(task.priority)
+    )
   );
 };
 
-// Find task by ID
+// Find a task using its ID
 const getTaskById = (id) => {
   const taskId = Number(id);
+
+  if (!Number.isInteger(taskId) || taskId <= 0) {
+    return undefined;
+  }
+
   return tasks.find((task) => task.id === taskId);
 };
 
-// GET all tasks with filtering and sorting
+// GET /tasks
+// Get all tasks, optionally filter by completion status
+// and sort by creation date.
 app.get('/tasks', (req, res) => {
   let result = [...tasks];
 
-  // Filter by completion status
+  // Filter tasks by completed status
   if (req.query.completed !== undefined) {
     if (!['true', 'false'].includes(req.query.completed)) {
       return res.status(400).json({
-        message: 'completed must be true or false',
+        message: 'completed must be true or false'
       });
     }
 
@@ -56,13 +70,13 @@ app.get('/tasks', (req, res) => {
     );
   }
 
-  // Sort by creation date
+  // Sort tasks by creation date
   if (req.query.sort !== undefined) {
     const sort = req.query.sort;
 
     if (!['asc', 'desc'].includes(sort)) {
       return res.status(400).json({
-        message: 'sort must be asc or desc',
+        message: 'sort must be asc or desc'
       });
     }
 
@@ -76,46 +90,49 @@ app.get('/tasks', (req, res) => {
     });
   }
 
-  res.status(200).json(result);
+  return res.status(200).json(result);
 });
 
-// GET tasks by priority
+// GET /tasks/priority/:level
+// Get tasks by priority
 app.get('/tasks/priority/:level', (req, res) => {
   const level = req.params.level;
 
   if (!priorities.includes(level)) {
     return res.status(400).json({
-      message: 'Priority must be low, medium, or high',
+      message: 'Priority must be low, medium, or high'
     });
   }
 
   const result = tasks.filter(
-    (task) => task.priority === level
+    (task) => (task.priority || 'medium') === level
   );
 
-  res.status(200).json(result);
+  return res.status(200).json(result);
 });
 
-// GET task by ID
+// GET /tasks/:id
+// Get a task by ID
 app.get('/tasks/:id', (req, res) => {
   const task = getTaskById(req.params.id);
 
   if (!task) {
     return res.status(404).json({
-      message: 'Task not found',
+      message: 'Task not found'
     });
   }
 
-  res.status(200).json(task);
+  return res.status(200).json(task);
 });
 
-// POST: Create a task
+// POST /tasks
+// Create a new task
 app.post('/tasks', (req, res) => {
   const newTask = req.body;
 
   if (!isValidTaskPayload(newTask)) {
     return res.status(400).json({
-      message: 'Invalid task data',
+      message: 'Invalid task data'
     });
   }
 
@@ -128,22 +145,23 @@ app.post('/tasks', (req, res) => {
     title: newTask.title.trim(),
     description: newTask.description.trim(),
     completed: newTask.completed,
-    priority: newTask.priority,
-    createdAt: new Date().toISOString(),
+    priority: newTask.priority ?? 'medium',
+    createdAt: new Date().toISOString()
   };
 
   tasks.push(createdTask);
 
-  res.status(201).json(createdTask);
+  return res.status(201).json(createdTask);
 });
 
-// PUT: Update a task
+// PUT /tasks/:id
+// Update an existing task
 app.put('/tasks/:id', (req, res) => {
   const task = getTaskById(req.params.id);
 
   if (!task) {
     return res.status(404).json({
-      message: 'Task not found',
+      message: 'Task not found'
     });
   }
 
@@ -151,7 +169,7 @@ app.put('/tasks/:id', (req, res) => {
 
   if (!isValidTaskPayload(updatedData)) {
     return res.status(400).json({
-      message: 'Invalid task data',
+      message: 'Invalid task data'
     });
   }
 
@@ -164,29 +182,31 @@ app.put('/tasks/:id', (req, res) => {
     title: updatedData.title.trim(),
     description: updatedData.description.trim(),
     completed: updatedData.completed,
-    priority: updatedData.priority,
+    priority: updatedData.priority ?? 'medium'
   };
 
-  res.status(200).json(tasks[taskIndex]);
+  return res.status(200).json(tasks[taskIndex]);
 });
 
-// DELETE: Remove a task
+// DELETE /tasks/:id
+// Delete a task by ID
 app.delete('/tasks/:id', (req, res) => {
   const task = getTaskById(req.params.id);
 
   if (!task) {
     return res.status(404).json({
-      message: 'Task not found',
+      message: 'Task not found'
     });
   }
 
   tasks = tasks.filter((item) => item.id !== task.id);
 
-  res.status(200).json({
-    message: 'Task deleted successfully',
+  return res.status(200).json({
+    message: 'Task deleted successfully'
   });
 });
 
+// Start the server when this file is run directly
 if (require.main === module) {
   app.listen(port, (err) => {
     if (err) {
